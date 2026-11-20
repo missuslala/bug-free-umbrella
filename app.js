@@ -86,6 +86,11 @@
   let editingId = null;
   let pendingPhoto = null;     // data URL for item dialog
   let pickSlot = null;
+  let dialogMode = 'closet';   // 'closet' or 'consider'
+  let colorAuto = false;       // color was guessed from the photo
+  let selectedCandidate = null;
+  const closetItems = () => items.filter(i => !i.considering);
+  const candidates = () => items.filter(i => i.considering);
 
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   const $ = sel => document.querySelector(sel);
@@ -148,6 +153,7 @@
         el('div', { class: 'card-name' }, item.name),
         el('div', { class: 'card-meta' }, colorDot(item.color), CATEGORY_LABEL[item.category] || item.category,
           item.onOrder ? el('span', { class: 'order-tag' }, 'on order') : null,
+          item.considering ? el('span', { class: 'consider-tag' }, 'considering') : null,
           item.sample ? el('span', { class: 'sample-tag' }, 'sample') : null)));
   }
 
@@ -155,13 +161,14 @@
   function renderCloset() {
     const cat = $('#filter-category').value;
     const q = $('#filter-search').value.trim().toLowerCase();
-    const list = items
+    const owned = closetItems();
+    const list = owned
       .filter(i => !cat || i.category === cat)
       .filter(i => !q || i.name.toLowerCase().includes(q) || (i.color || '').includes(q) || (i.shop || '').toLowerCase().includes(q));
-    $('#sample-banner').hidden = !items.some(i => i.sample);
+    $('#sample-banner').hidden = !owned.some(i => i.sample);
     const grid = $('#closet-grid');
     grid.replaceChildren(...list.map(i => itemCard(i, () => openItemDialog(i))));
-    $('#closet-empty').textContent = items.length === 0
+    $('#closet-empty').textContent = owned.length === 0
       ? 'Your closet is empty. Add a few tops, bottoms and shoes to start making outfits.'
       : list.length === 0 ? 'No items match.' : '';
   }
@@ -182,10 +189,16 @@
     $('#photo-placeholder').hidden = !!src;
   }
 
-  function openItemDialog(item) {
+  function openItemDialog(item, mode) {
     editingId = item ? item.id : null;
+    dialogMode = mode || (item?.considering ? 'consider' : 'closet');
+    const considering = dialogMode === 'consider';
     pendingPhoto = item ? item.photo || null : null;
-    $('#item-dialog-title').textContent = item ? 'Edit item' : 'Add item';
+    colorAuto = false;
+    $('#item-dialog-title').textContent = considering ? (item ? 'Edit piece' : 'Check a piece before buying') : item ? 'Edit item' : 'Add item';
+    $('#item-submit').textContent = considering ? 'Check with my closet' : 'Save';
+    $('#item-on-order').closest('label').hidden = considering;
+    $('#color-hint').hidden = true;
     $('#item-name').value = item ? item.name : '';
     $('#item-category').value = item ? item.category : 'top';
     $('#item-color').value = item ? item.color || '' : '';
@@ -194,9 +207,12 @@
     $('#delete-item-btn').hidden = !item;
     $('#item-link').value = item?.link || '';
     $('#item-on-order').checked = !!item?.onOrder;
-    $('#link-status').textContent = 'Paste a link to something you bought, and the details are read from it.';
+    $('#link-status').textContent = considering
+      ? 'Paste the product link, or skip this and take a photo below.'
+      : 'Paste a link to something you bought, and the details are read from it.';
     showLinkOpen(item?.link);
     $('#item-photo').value = '';
+    $('#item-camera').value = '';
     setPhotoPreview(pendingPhoto);
     $('#item-dialog').showModal();
   }
@@ -236,22 +252,32 @@
       photo: pendingPhoto,
       link: safeLink($('#item-link').value) || '',
       shop: shopName($('#item-link').value),
-      onOrder: $('#item-on-order').checked,
+      onOrder: dialogMode === 'consider' ? false : $('#item-on-order').checked,
+      considering: dialogMode === 'consider',
     };
+    let savedId = editingId;
     if (editingId) {
       const idx = items.findIndex(i => i.id === editingId);
       if (idx >= 0) items[idx] = { ...items[idx], ...data };
     } else {
-      items.push({ id: uid(), createdAt: Date.now(), ...data });
+      savedId = uid();
+      items.push({ id: savedId, createdAt: Date.now(), ...data });
     }
     await save('items', items);
     $('#item-dialog').close();
+    if (data.considering) {
+      selectedCandidate = savedId;
+      renderAll();
+      switchView('try');
+      return;
+    }
     toast(editingId ? 'Item updated' : 'Item added');
     renderAll();
   }
 
   async function deleteItem() {
-    if (!editingId || !(await askConfirm('Delete this item from your closet?'))) return;
+    const what = dialogMode === 'consider' ? 'Remove this piece from your list?' : 'Delete this item from your closet?';
+    if (!editingId || !(await askConfirm(what, 'Remove'))) return;
     items = items.filter(i => i.id !== editingId);
     for (const slot of Object.keys(current)) if (current[slot] === editingId) { delete current[slot]; locked.delete(slot); }
     await save('items', items);
@@ -344,7 +370,8 @@
       const last = clean.match(/(?:\s+in)?\s+(\S+)$/);
       if (last && COLOR_WORDS.some(([k, re]) => k !== 'pattern' && re.test(last[1]))) clean = clean.slice(0, last.index);
     }
-    clean = clean.replace(/\s+(in|with|and)$/, '').trim() || words.toLowerCase();
+    clean = clean.replace(/\s+(hot|neon|bright|light|dark|pale|deep|dusty|soft|washed|true|classic)$/, '')
+      .replace(/\s+(in|with|and)$/, '').trim() || words.toLowerCase();
     const name = clean.charAt(0).toUpperCase() + clean.slice(1);
     const seasons = [...new Set(SEASON_WORDS.filter(([, re]) => re.test(text)).flatMap(([v]) => v))];
     const occasions = OCCASION_WORDS.filter(([, re]) => re.test(text)).map(([v]) => v);
@@ -377,7 +404,8 @@
     if (info.color) $('#item-color').value = info.color;
     chipGroup($('#item-seasons'), SEASONS, info.seasons);
     chipGroup($('#item-occasions'), OCCASIONS, info.occasions);
-    if (!editingId) $('#item-on-order').checked = true;
+    if (!editingId && dialogMode !== 'consider') $('#item-on-order').checked = true;
+    if (info.color) { colorAuto = false; $('#color-hint').hidden = true; }
     const missing = [!info.category && 'category', !info.color && 'color'].filter(Boolean);
     status.textContent = `Filled in from ${info.shop}. Check the details${missing.length ? `, and pick the ${missing.join(' and ')}` : ''}. ` +
       'To add the photo, copy the product image in the shop and paste it here.';
@@ -385,8 +413,63 @@
 
   async function usePhotoFile(file) {
     if (!file || !file.type.startsWith('image/')) return false;
-    try { pendingPhoto = await compressImage(file); setPhotoPreview(pendingPhoto); return true; }
+    try { pendingPhoto = await compressImage(file); setPhotoPreview(pendingPhoto); }
     catch { toast('Could not read that image'); return false; }
+    // guess the color unless the person (or the link) already chose one
+    if (!$('#item-color').value || colorAuto) {
+      const guess = await detectColor(pendingPhoto).catch(() => null);
+      if (guess) {
+        $('#item-color').value = guess;
+        colorAuto = true;
+        const hint = $('#color-hint');
+        hint.textContent = `From the photo this looks ${guess}. Change it if not.`;
+        hint.hidden = false;
+      }
+    }
+    return true;
+  }
+
+  // reference shades for reading a garment's color from a photo
+  const DETECT = {
+    black: [30, 30, 32], white: [238, 236, 230], grey: [128, 128, 128], navy: [32, 42, 78], beige: [212, 192, 158],
+    brown: [105, 72, 48], denim: [88, 115, 155], red: [180, 40, 45], pink: [232, 160, 178], orange: [222, 118, 45],
+    yellow: [230, 198, 70], green: [60, 135, 80], olive: [112, 110, 55], blue: [55, 110, 195], purple: [118, 72, 145],
+  };
+  function nearestColor(r, g, b) {
+    let best = null, bestD = Infinity;
+    for (const [key, [R, G, B]] of Object.entries(DETECT)) {
+      const d = 2 * (r - R) ** 2 + 4 * (g - G) ** 2 + 3 * (b - B) ** 2;
+      if (d < bestD) { bestD = d; best = key; }
+    }
+    return best;
+  }
+  function detectColor(src) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const W = 48, H = 60;
+        const c = document.createElement('canvas'); c.width = W; c.height = H;
+        const ctx = c.getContext('2d', { willReadFrequently: true });
+        ctx.drawImage(img, 0, 0, W, H);
+        const px = ctx.getImageData(0, 0, W, H).data;
+        const at = (x, y) => { const i = (y * W + x) * 4; return nearestColor(px[i], px[i + 1], px[i + 2]); };
+        // the border is usually background (a white shop backdrop, a wall, a hanger rail)
+        const border = {};
+        for (let x = 0; x < W; x++) for (const y of [0, 1, H - 2, H - 1]) { const k = at(x, y); border[k] = (border[k] || 0) + 1; }
+        for (let y = 0; y < H; y++) for (const x of [0, 1, W - 2, W - 1]) { const k = at(x, y); border[k] = (border[k] || 0) + 1; }
+        const total = Object.values(border).reduce((a, b) => a + b, 0);
+        const backdrop = Object.entries(border).filter(([, n]) => n / total > 0.45).map(([k]) => k);
+        const counts = {};
+        for (let y = Math.floor(H * 0.2); y < H * 0.8; y++) for (let x = Math.floor(W * 0.2); x < W * 0.8; x++) {
+          const k = at(x, y); counts[k] = (counts[k] || 0) + 1;
+        }
+        const ranked = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+        const pick = ranked.find(([k, n]) => !backdrop.includes(k) && n > 30) || ranked[0];
+        resolve(pick ? pick[0] : null);
+      };
+      img.onerror = reject;
+      img.src = src;
+    });
   }
 
   // ---------- Outfit generator ----------
@@ -396,7 +479,7 @@
     const occ = $('#gen-occasion').value;
     const season = $('#gen-season').value;
     // untagged items count as "works for anything"
-    return items.filter(i => i.category === category
+    return closetItems().filter(i => i.category === category
       && (!occ || !i.occasions?.length || i.occasions.includes(occ))
       && (!season || !i.seasons?.length || i.seasons.includes(season)));
   }
@@ -437,6 +520,7 @@
     if (!pieces.length) return null;
     const colorOf = p => COLOR_BY_KEY[p.color];
     const notes = [];
+    const flags = new Set();
     let score = 10, title;
 
     const accents = pieces.filter(p => colorOf(p) && !colorOf(p).neutral && !colorOf(p).pattern);
@@ -477,16 +561,16 @@
       } else {
         title = 'Mixed accents';
         notes.push(`${cap(a)} and ${b} pull in different directions. Swap one for a neutral to calm the look down.`);
-        score -= 6;
+        score -= 6; flags.add('color');
       }
     } else {
       title = 'Too many colors';
       notes.push(`${accentKeys.length} accent colors is a lot for one look. Keep it to one or two.`);
-      score -= 10;
+      score -= 10; flags.add('color');
     }
 
     // prints
-    if (prints.length > 1) { score -= 8; notes.push('Two prints fight for attention. Keep one and make the rest solid.'); }
+    if (prints.length > 1) { score -= 8; flags.add('prints'); notes.push('Two prints fight for attention. Keep one and make the rest solid.'); }
     else if (prints.length === 1 && accentKeys.length >= 2) score -= 2;
     else if (prints.length === 1 && accentKeys.length === 1) {
       notes.push(`${cap(the(prints[0]))} ${verb(prints[0], 'is', 'are')} the only print, so ${verb(prints[0], 'it has', 'they have')} room to breathe next to solids.`);
@@ -499,9 +583,9 @@
       if (spread > 1.5) {
         const odd = pieces.filter(p => formalityOf(p) != null).sort((x, y) => formalityOf(x) - formalityOf(y))[0];
         notes.push(`${cap(the(odd))} is much more casual than the rest. Swap it for something closer in polish.`);
-        score -= 10;
+        score -= 10; flags.add('formality');
       } else if (spread > 1) {
-        score -= 3;
+        score -= 3; flags.add('formality');
       } else {
         notes.push(`Every piece sits at the same level of dress, so the look feels ${DRESS_WORD[Math.round(avgOf(levels))]} and intentional.`);
         score += 2;
@@ -531,7 +615,7 @@
       }
     }
 
-    return { score, title, notes: notes.slice(0, 3), tip: stylingTip(combo, levels) };
+    return { score, title, flags: [...flags], notes: notes.slice(0, 3), tip: stylingTip(combo, levels) };
   }
 
   function stylingTip(combo, levels) {
@@ -671,11 +755,11 @@
         }, isLocked ? 'Kept' : 'Keep') : null,
         item ? itemCard(item, () => openPicker(slot))
              : el('button', { class: 'slot-empty', type: 'button', onclick: () => openPicker(slot) },
-                 eligible(slot).length || items.some(i => i.category === slot) ? 'Choose…' : 'None in closet'));
+                 eligible(slot).length || closetItems().some(i => i.category === slot) ? 'Choose…' : 'None in closet'));
     }));
 
     const msg = $('#outfit-message');
-    if (!items.length) msg.textContent = 'Add clothes to your closet first.';
+    if (!closetItems().length) msg.textContent = 'Add clothes to your closet first.';
     else if (!slots.some(s => current[s])) msg.textContent = 'Nothing matches these filters — try "Any".';
     else msg.textContent = '';
     renderStylist(slots);
@@ -684,7 +768,7 @@
   function openPicker(slot) {
     pickSlot = slot;
     $('#pick-title').textContent = 'Choose ' + CATEGORY_LABEL[slot].toLowerCase();
-    const pool = items.filter(i => i.category === slot);
+    const pool = closetItems().filter(i => i.category === slot);
     $('#pick-grid').replaceChildren(...(pool.length
       ? pool.map(i => itemCard(i, () => choose(i.id)))
       : [el('p', { class: 'empty' }, 'No items in this category yet.')]));
@@ -717,6 +801,180 @@
     $('#outfit-name').value = '';
     toast('Outfit saved');
     renderSaved();
+  }
+
+  // ---------- Before you buy ----------
+  const GOOD_LOOK = 12;
+  const NEEDS = { top: ['bottom'], bottom: ['top'], dress: [], outerwear: [], shoes: [], accessory: [] };
+
+  // build outfits that include the candidate, using only what's already in the closet
+  function looksWith(cand, samples = 600) {
+    const owned = closetItems();
+    const pool = cat => owned.filter(i => i.category === cat);
+    const seen = new Map();
+    for (let n = 0; n < samples; n++) {
+      let useDress;
+      if (cand.category === 'dress') useDress = true;
+      else if (cand.category === 'top' || cand.category === 'bottom') useDress = false;
+      else {
+        const canDress = pool('dress').length > 0, canSep = pool('top').length && pool('bottom').length;
+        useDress = canDress && (!canSep || Math.random() < 0.35);
+      }
+      const slots = useDress ? ['dress'] : ['top', 'bottom'];
+      if (cand.category === 'outerwear' || Math.random() < 0.35) slots.push('outerwear');
+      slots.push('shoes');
+      if (cand.category === 'accessory' || Math.random() < 0.5) slots.push('accessory');
+      const combo = {};
+      for (const slot of slots) {
+        if (slot === cand.category) { combo[slot] = cand.id; continue; }
+        const p = pool(slot);
+        if (p.length) combo[slot] = pickRandom(p).id;
+      }
+      if (Object.keys(combo).length < 2) continue;
+      const key = comboKey(combo);
+      if (seen.has(key)) continue;
+      const look = styleOutfit(combo);
+      if (look) seen.set(key, { combo, key, ...look });
+    }
+    return [...seen.values()].sort((x, y) => y.score - x.score);
+  }
+
+  function assess(cand) {
+    const owned = closetItems();
+    const looks = looksWith(cand);
+    const good = looks.filter(l => l.score >= GOOD_LOOK);
+    const partnerIds = new Set(good.flatMap(l => Object.values(l.combo)).filter(id => id !== cand.id));
+    const partners = [...partnerIds].map(byId).filter(Boolean);
+    const similar = owned.filter(i => i.category === cand.category && i.color && i.color === cand.color);
+    const missing = NEEDS[cand.category].filter(cat => !owned.some(i => i.category === cat));
+
+    // three good ways to wear it that don't repeat each other
+    const ways = [];
+    const differs = (x, y) => { const a = x.split('|'), b = new Set(y.split('|')); return a.filter(id => !b.has(id)).length >= 2; };
+    for (let l of good) {
+      if (ways.some(w => !differs(w.key, l.key))) continue;
+      // when the piece itself is the hero, name the look after what it's paired with
+      if (l.title.includes(cand.name.toLowerCase())) {
+        const ids = Object.values(l.combo).filter(id => id !== cand.id).map(byId);
+        const partner = ids.find(p => ['bottom', 'top', 'dress'].includes(p.category)) || ids[0];
+        l = { ...l, title: 'With ' + the(partner) };
+      }
+      if (ways.some(w => w.title === l.title)) continue;
+      ways.push(l);
+      if (ways.length === 3) break;
+    }
+
+    const reasons = [];
+    let level;
+    if (missing.length) {
+      level = 'hard';
+      reasons.push(`You don't own any ${missing.map(c => CATEGORY_LABEL[c].toLowerCase() + 's').join(' or ')} to wear it with yet.`);
+    } else {
+      // versatility: the share of possible outfits with it that a stylist would sign off on
+      const share = looks.length ? good.length / looks.length : 0;
+      if (share >= 0.3 && partners.length >= 5) level = 'great';
+      else if (share >= 0.1 && good.length >= 2) level = 'some';
+      else level = 'hard';
+    }
+
+    if (level !== 'great' && !missing.length) {
+      const share = Math.round(100 * good.length / Math.max(1, looks.length));
+      reasons.push(`Only about ${share}% of the outfits it could make with your closet work well.`);
+      const tally = {};
+      for (const l of looks.slice(0, 30)) for (const f of l.flags) tally[f] = (tally[f] || 0) + 1;
+      const top = Object.entries(tally).sort((x, y) => y[1] - x[1])[0]?.[0];
+      if (top === 'formality') reasons.push(`It's a different level of dress from most of your closet, so it will feel out of place with what you wear now.`);
+      if (top === 'color') reasons.push(`Its ${cand.color || 'color'} competes with the colors you already own. A neutral version would be easier to wear.`);
+      if (top === 'prints') reasons.push('Your closet already has prints that would compete with it.');
+    }
+    if (similar.length) {
+      reasons.push(`You already own ${the(similar[0])}${similar.length > 1 ? ` and ${similar.length - 1} more like it` : ''}. Make sure this adds something new.`);
+      if (level === 'great') level = 'some';
+    }
+
+    const count = good.length >= 20 ? '20+' : String(good.length);
+    const headline = level === 'some' && similar.length && good.length >= 6
+      ? 'Easy to wear, but you have one'
+      : { great: 'A smart buy', some: 'Could work', hard: 'Hard to style with your closet' }[level];
+    const summary = good.length
+      ? `Makes ${count} strong outfit${good.length === 1 ? '' : 's'} with ${partners.length} piece${partners.length === 1 ? '' : 's'} you already own.`
+      : 'It doesn’t make any strong outfits with what you own right now.';
+    return { level, headline, summary, reasons, partners, ways };
+  }
+
+  function renderTry() {
+    const list = candidates();
+    if (!list.some(c => c.id === selectedCandidate)) selectedCandidate = list[list.length - 1]?.id || null;
+    $('#consider-list').replaceChildren(...list.map(c => {
+      const card = itemCard(c, () => { selectedCandidate = c.id; renderTry(); });
+      if (c.id === selectedCandidate) card.classList.add('selected');
+      return card;
+    }));
+    $('#consider-empty').textContent = list.length ? '' : 'Nothing on your list yet. Check a piece you’re thinking about buying.';
+    const box = $('#assessment');
+    const cand = byId(selectedCandidate);
+    box.hidden = !cand;
+    if (!cand) { box.replaceChildren(); return; }
+
+    const a = assess(cand);
+    const levelTag = { great: 'high', some: 'mid', hard: 'low' }[a.level];
+    const verdictText = { great: 'Buy it', some: 'Think it over', hard: 'Probably skip' }[a.level];
+    const pieceMini = (p, isCand) => el('div', { class: 'mini' + (isCand ? ' candidate' : '') }, thumb(p));
+
+    box.replaceChildren(
+      el('div', { class: 'verdict-head' },
+        thumb(cand),
+        el('div', { class: 'verdict-body' },
+          el('div', { class: 'stylist-head' },
+            el('span', { class: 'eyebrow' }, "Stylist's verdict"),
+            el('span', { class: 'verdict', 'data-level': levelTag }, verdictText)),
+          el('h2', {}, a.headline),
+          el('p', { class: 'card-meta' }, cand.name, cand.shop ? ' · ' + cand.shop : ''),
+          el('p', { class: 'summary' }, a.summary),
+          a.reasons.length ? el('ul', {}, a.reasons.map(r => el('li', {}, r))) : null,
+          a.partners.length ? el('div', {},
+            el('p', { class: 'eyebrow' }, 'Works with'),
+            el('div', { class: 'partners' }, a.partners.slice(0, 12).map(p => el('div', { class: 'mini', title: p.name }, thumb(p))))) : null,
+          el('div', { class: 'verdict-actions' },
+            el('button', { class: 'btn primary', type: 'button', onclick: () => boughtIt(cand) }, 'I bought it'),
+            el('button', { class: 'btn', type: 'button', onclick: () => openItemDialog(cand, 'consider') }, 'Edit details'),
+            cand.link ? el('a', { class: 'btn ghost', href: cand.link, target: '_blank', rel: 'noopener noreferrer' }, 'Open in shop ↗') : null,
+            el('button', { class: 'btn danger', type: 'button', onclick: () => removeCandidate(cand) }, 'Remove')))),
+      a.ways.length ? el('div', { class: 'ways' },
+        el('h3', {}, 'Ways to wear it'),
+        el('div', { class: 'ways-list' }, a.ways.map(w => el('article', { class: 'way' },
+          el('div', { class: 'way-items' },
+            CATEGORIES.map(c => c.key).filter(k => w.combo[k]).map(k => pieceMini(byId(w.combo[k]), w.combo[k] === cand.id))),
+          el('div', {},
+            el('h4', {}, w.title),
+            w.notes.slice(0, 2).map(n => el('p', {}, n)),
+            w.tip ? el('p', {}, el('strong', {}, 'Tip '), w.tip) : null,
+            el('button', { class: 'btn ghost', type: 'button', onclick: () => tryLook(w.combo) }, 'Open in Make outfit')))))) : null);
+  }
+
+  async function boughtIt(cand) {
+    Object.assign(cand, { considering: false, onOrder: true });
+    await save('items', items);
+    selectedCandidate = null;
+    toast('Added to your closet, marked On order');
+    renderAll();
+  }
+
+  async function removeCandidate(cand) {
+    if (!(await askConfirm(`Remove ${the(cand)} from your list?`, 'Remove'))) return;
+    items = items.filter(i => i.id !== cand.id);
+    for (const slot of Object.keys(current)) if (current[slot] === cand.id) { delete current[slot]; locked.delete(slot); }
+    await save('items', items);
+    renderAll();
+  }
+
+  function tryLook(combo) {
+    applyCombo(combo, false);
+    for (const k of Object.keys(combo)) locked.add(k);
+    switchView('create');
+    renderBoard();
+    refreshPicks();
+    window.scrollTo({ top: 0 });
   }
 
   // ---------- Saved view ----------
@@ -787,7 +1045,7 @@
         photo: typeof i.photo === 'string' && i.photo.startsWith('data:image/') ? i.photo : null,
         createdAt: Number(i.createdAt) || Date.now(),
         sample: i.sample === true || undefined,
-        link: safeLink(i.link) || '', shop: shopName(i.link), onOrder: i.onOrder === true,
+        link: safeLink(i.link) || '', shop: shopName(i.link), onOrder: i.onOrder === true, considering: i.considering === true,
       });
       const known = new Set(items.map(i => i.id));
       const newItems = data.items.map(clean).filter(i => !known.has(i.id));
@@ -844,10 +1102,11 @@
   function switchView(name) {
     document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.view === name));
     document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + name));
-    if (name === 'create' && !Object.keys(current).length && items.length) shuffle();
+    if (name === 'create' && !Object.keys(current).length && closetItems().length) shuffle();
   }
 
   function renderAll() {
+    renderTry();
     renderCloset();
     renderBoard();
     renderSaved();
@@ -889,6 +1148,9 @@
 
     $('#clear-samples-btn').addEventListener('click', clearSamples);
     $('#link-fill-btn').addEventListener('click', fillFromLink);
+    $('#consider-btn').addEventListener('click', () => openItemDialog(null, 'consider'));
+    $('#item-camera').addEventListener('change', async e => { if (e.target.files[0]) await usePhotoFile(e.target.files[0]); });
+    $('#item-color').addEventListener('change', () => { colorAuto = false; $('#color-hint').hidden = true; });
     $('#item-link').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); fillFromLink(); } });
     $('#item-link').addEventListener('paste', () => setTimeout(fillFromLink, 0));
     $('#item-dialog').addEventListener('paste', async e => {

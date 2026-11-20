@@ -15,6 +15,7 @@
     <nav class="tabs" role="tablist">
       <button class="tab active" data-view="closet" role="tab">My closet</button>
       <button class="tab" data-view="create" role="tab">Make outfit</button>
+      <button class="tab" data-view="try" role="tab">Before you buy</button>
       <button class="tab" data-view="saved" role="tab">Saved</button>
     </nav>
   </header>
@@ -77,6 +78,20 @@
       </section>
     </section>
 
+    <!-- BEFORE YOU BUY -->
+    <section id="view-try" class="view">
+      <div class="try-intro">
+        <div>
+          <h2>Before you buy</h2>
+          <p>Snap a photo in the store or paste a shop link. The stylist checks the piece against your closet before you spend anything.</p>
+        </div>
+        <button id="consider-btn" class="btn primary" type="button">+ Check a piece</button>
+      </div>
+      <div id="consider-list" class="consider-list"></div>
+      <p id="consider-empty" class="empty"></p>
+      <section id="assessment" class="assessment" hidden></section>
+    </section>
+
     <!-- SAVED -->
     <section id="view-saved" class="view">
       <div id="saved-list" class="saved-list"></div>
@@ -97,14 +112,18 @@
         <p id="link-status" class="field-hint">Paste a link to something you bought, and the details are read from it.</p>
         <a id="item-link-open" class="field-hint" target="_blank" rel="noopener noreferrer" hidden>Open shop page ↗</a>
       </div>
-      <label class="photo-drop">
+      <div class="photo-drop">
         <img id="photo-preview" alt="" hidden />
-        <span id="photo-placeholder">Add a photo, or copy the product image in the shop and paste it here</span>
-        <input id="item-photo" type="file" accept="image/*" hidden />
-      </label>
+        <span id="photo-placeholder">Take a photo, choose one, or copy the product image in the shop and paste it here</span>
+        <div class="photo-actions">
+          <label class="btn">Take photo<input id="item-camera" type="file" accept="image/*" capture="environment" hidden /></label>
+          <label class="btn">Choose photo<input id="item-photo" type="file" accept="image/*" hidden /></label>
+        </div>
+      </div>
       <label>Name<input id="item-name" required placeholder="e.g. White linen shirt" /></label>
       <label>Category<select id="item-category" required></select></label>
       <label>Color<select id="item-color"></select></label>
+      <p id="color-hint" class="field-hint" hidden></p>
       <label class="check-row"><input id="item-on-order" type="checkbox" /> On order (not arrived yet)</label>
       <fieldset>
         <legend>Seasons</legend>
@@ -118,7 +137,7 @@
         <button type="button" id="delete-item-btn" class="btn danger" hidden>Delete</button>
         <span class="spacer"></span>
         <button type="button" id="cancel-item-btn" class="btn ghost">Cancel</button>
-        <button type="submit" class="btn primary">Save</button>
+        <button type="submit" id="item-submit" class="btn primary">Save</button>
       </div>
     </form>
   </dialog>

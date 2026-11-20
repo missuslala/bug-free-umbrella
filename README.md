@@ -22,6 +22,12 @@ To use it from your phone, host the folder anywhere static (GitHub Pages works),
   a finishing piece that echoes a base color, and light/dark contrast. It then explains the look in
   *Stylist's notes*, gives a styling tip and a verdict, and suggests three more looks to try.
   Choose **Keep** on a piece to hold it while the rest changes, or tap a piece to choose one yourself.
+- **Before you buy** – check a piece before you buy it. Take a photo in the store (on a phone, **Take photo**
+  opens the camera), choose a photo, or paste a shop link. The app guesses the color from the photo, then the
+  stylist checks the piece against your closet. You see how many strong outfits it makes, which of your
+  pieces it works with, whether you already own something too similar, and a verdict (*Buy it*,
+  *Think it over* or *Probably skip*). You also get three ways to wear it. **I bought it** moves the piece
+  into your closet marked *On order*.
 - **Saved** – name and save outfits you like, then open them again later.
 - **Export / Import** – back up your closet (photos included) to a JSON file, or move it to another browser.
 
