@@ -26,8 +26,12 @@
         </select>
         <input id="filter-search" type="search" placeholder="Search name or color" aria-label="Search" />
         <span class="spacer"></span>
-        <button id="export-btn" class="btn ghost">Export</button>
+        <button id="export-btn" class="btn ghost">Back up</button>
         <label class="btn ghost">Import<input id="import-input" type="file" accept="application/json" hidden /></label>
+      </div>
+      <div id="sample-banner" class="sample-banner" hidden>
+        <span>These are sample items so you can try the outfit maker. Add your own clothes, then clear the samples.</span>
+        <button id="clear-samples-btn" class="btn" type="button">Clear samples</button>
       </div>
       <div id="closet-grid" class="grid"></div>
       <p id="closet-empty" class="empty">Your closet is empty. Add a few tops, bottoms and shoes to start making outfits.</p>
@@ -101,6 +105,29 @@
       <button type="button" id="pick-none-btn" class="btn ghost">Remove from outfit</button>
       <span class="spacer"></span>
       <button type="button" id="pick-close-btn" class="btn ghost">Close</button>
+    </div>
+  </dialog>
+
+  <!-- In-page confirm (browser confirm() is unavailable in some embeds) -->
+  <dialog id="confirm-dialog">
+    <p id="confirm-text" class="confirm-text"></p>
+    <div class="dialog-actions">
+      <span class="spacer"></span>
+      <button type="button" id="confirm-cancel" class="btn ghost">Cancel</button>
+      <button type="button" id="confirm-ok" class="btn danger">Delete</button>
+    </div>
+  </dialog>
+
+  <!-- Backup -->
+  <dialog id="backup-dialog">
+    <h2>Back up your closet</h2>
+    <p class="hint">Download the file, or copy the text and keep it somewhere safe. To restore, use Import on the closet tab.</p>
+    <textarea id="backup-text" readonly></textarea>
+    <div class="dialog-actions">
+      <button type="button" id="backup-download" class="btn">Download file</button>
+      <button type="button" id="backup-copy" class="btn">Copy text</button>
+      <span class="spacer"></span>
+      <button type="button" id="backup-close" class="btn ghost">Close</button>
     </div>
   </dialog>
 

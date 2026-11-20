@@ -103,6 +103,20 @@
     return n;
   }
 
+  function askConfirm(message, okLabel = 'Delete') {
+    return new Promise(resolve => {
+      const d = $('#confirm-dialog');
+      $('#confirm-text').textContent = message;
+      $('#confirm-ok').textContent = okLabel;
+      const done = v => { d.removeEventListener('close', onClose); $('#confirm-ok').onclick = $('#confirm-cancel').onclick = null; if (d.open) d.close(); resolve(v); };
+      const onClose = () => done(false);
+      $('#confirm-ok').onclick = () => done(true);
+      $('#confirm-cancel').onclick = () => done(false);
+      d.addEventListener('close', onClose);
+      d.showModal();
+    });
+  }
+
   let toastTimer;
   function toast(msg) {
     const t = $('#toast');
@@ -132,7 +146,8 @@
       thumb(item),
       el('div', { class: 'card-body' },
         el('div', { class: 'card-name' }, item.name),
-        el('div', { class: 'card-meta' }, colorDot(item.color), CATEGORY_LABEL[item.category] || item.category)));
+        el('div', { class: 'card-meta' }, colorDot(item.color), CATEGORY_LABEL[item.category] || item.category,
+          item.sample ? el('span', { class: 'sample-tag' }, 'sample') : null)));
   }
 
   // ---------- Closet view ----------
@@ -142,6 +157,7 @@
     const list = items
       .filter(i => !cat || i.category === cat)
       .filter(i => !q || i.name.toLowerCase().includes(q) || (i.color || '').includes(q));
+    $('#sample-banner').hidden = !items.some(i => i.sample);
     const grid = $('#closet-grid');
     grid.replaceChildren(...list.map(i => itemCard(i, () => openItemDialog(i))));
     $('#closet-empty').textContent = items.length === 0
@@ -227,7 +243,7 @@
   }
 
   async function deleteItem() {
-    if (!editingId || !confirm('Delete this item from your closet?')) return;
+    if (!editingId || !(await askConfirm('Delete this item from your closet?'))) return;
     items = items.filter(i => i.id !== editingId);
     for (const slot of Object.keys(current)) if (current[slot] === editingId) { delete current[slot]; locked.delete(slot); }
     await save('items', items);
@@ -407,18 +423,31 @@
   }
 
   async function deleteOutfit(id) {
-    if (!confirm('Delete this saved outfit?')) return;
+    if (!(await askConfirm('Delete this saved outfit?'))) return;
     outfits = outfits.filter(o => o.id !== id);
     await save('outfits', outfits);
     renderSaved();
   }
 
   // ---------- Import / export ----------
+  const backupJSON = () => JSON.stringify({ app: 'closet-outfit-maker', version: 1, items, outfits });
+
   function exportData() {
-    const blob = new Blob([JSON.stringify({ app: 'closet-outfit-maker', version: 1, items, outfits }, null, 2)], { type: 'application/json' });
+    $('#backup-text').value = backupJSON();
+    $('#backup-dialog').showModal();
+  }
+
+  function downloadBackup() {
+    const blob = new Blob([backupJSON()], { type: 'application/json' });
     const a = el('a', { href: URL.createObjectURL(blob), download: 'closet-backup.json' });
     document.body.append(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+
+  async function copyBackup() {
+    const ta = $('#backup-text');
+    try { await navigator.clipboard.writeText(ta.value); toast('Backup copied'); }
+    catch { ta.focus(); ta.select(); toast('Press Ctrl+C / Cmd+C to copy'); }
   }
 
   async function importData(file) {
@@ -433,6 +462,7 @@
         occasions: (i.occasions || []).filter(s => OCCASIONS.includes(s)),
         photo: typeof i.photo === 'string' && i.photo.startsWith('data:image/') ? i.photo : null,
         createdAt: Number(i.createdAt) || Date.now(),
+        sample: i.sample === true || undefined,
       });
       const known = new Set(items.map(i => i.id));
       const newItems = data.items.map(clean).filter(i => !known.has(i.id));
@@ -449,6 +479,40 @@
     } catch {
       toast('That file could not be imported');
     }
+  }
+
+  // ---------- Sample closet (first visit only) ----------
+  const SAMPLES = [
+    ['White oxford shirt', 'top', 'white', ['spring', 'summer', 'fall'], ['work', 'casual']],
+    ['Striped breton tee', 'top', 'pattern', ['spring', 'summer'], ['casual']],
+    ['Rust knit sweater', 'top', 'orange', ['fall', 'winter'], ['casual', 'work']],
+    ['Straight-leg jeans', 'bottom', 'denim', [], ['casual']],
+    ['Black tailored trousers', 'bottom', 'black', [], ['work', 'formal']],
+    ['Olive midi skirt', 'bottom', 'olive', ['spring', 'fall'], ['casual', 'work']],
+    ['Navy slip dress', 'dress', 'navy', ['spring', 'summer'], ['going out', 'formal']],
+    ['Camel wool coat', 'outerwear', 'beige', ['fall', 'winter'], ['work', 'casual', 'formal']],
+    ['Denim jacket', 'outerwear', 'denim', ['spring', 'fall'], ['casual']],
+    ['White sneakers', 'shoes', 'white', [], ['casual', 'sport']],
+    ['Brown leather loafers', 'shoes', 'brown', [], ['work', 'casual']],
+    ['Black ankle boots', 'shoes', 'black', ['fall', 'winter'], ['going out', 'work', 'casual']],
+    ['Gold hoop earrings', 'accessory', 'yellow', [], ['going out', 'work', 'casual']],
+    ['Silk print scarf', 'accessory', 'pattern', [], ['work', 'casual']],
+  ];
+
+  function sampleItems() {
+    return SAMPLES.map(([name, category, color, seasons, occasions], n) => ({
+      id: 'sample-' + n, name, category, color, seasons, occasions, photo: null, createdAt: Date.now() + n, sample: true,
+    }));
+  }
+
+  async function clearSamples() {
+    items = items.filter(i => !i.sample);
+    for (const slot of Object.keys(current)) if (!byId(current[slot])) { delete current[slot]; locked.delete(slot); }
+    outfits = outfits.map(o => ({ ...o, itemIds: o.itemIds.filter(byId) })).filter(o => o.itemIds.length);
+    await save('items', items);
+    await save('outfits', outfits);
+    toast('Samples cleared');
+    renderAll();
   }
 
   // ---------- Navigation ----------
@@ -499,7 +563,14 @@
     $('#export-btn').addEventListener('click', exportData);
     $('#import-input').addEventListener('change', e => { if (e.target.files[0]) importData(e.target.files[0]); e.target.value = ''; });
 
-    items = await load('items', []);
+    $('#clear-samples-btn').addEventListener('click', clearSamples);
+    $('#backup-download').addEventListener('click', downloadBackup);
+    $('#backup-copy').addEventListener('click', copyBackup);
+    $('#backup-close').addEventListener('click', () => $('#backup-dialog').close());
+
+    const stored = await load('items', null);
+    items = stored ?? sampleItems();
+    if (!stored) await save('items', items);
     outfits = await load('outfits', []);
     renderAll();
   }
