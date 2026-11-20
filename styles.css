@@ -244,6 +244,52 @@ legend { color: var(--muted); font-size: 12px; letter-spacing: .08em; margin-bot
 }
 .confirm-text { margin: 0 0 8px; font-family: var(--font-display); font-size: 17px; }
 
+/* Shop link */
+.link-row { display: grid; gap: 6px; padding-bottom: 18px; border-bottom: 1px solid var(--border); }
+.link-row > label { color: var(--muted); font-size: 12px; letter-spacing: .08em; }
+.optional { opacity: .7; }
+.link-input { display: flex; gap: 10px; align-items: end; }
+.link-input input { flex: 1; font: inherit; font-size: 14px; color: var(--text); background: transparent;
+  border: 0; border-bottom: 1px solid var(--border); border-radius: 0; padding: 6px 2px; min-width: 0; }
+.field-hint { margin: 0; font-size: 12px; color: var(--muted); }
+a.field-hint { color: var(--accent); text-decoration: none; justify-self: start; }
+a.field-hint:hover { text-decoration: underline; }
+#item-form > .check-row, .check-row { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; }
+.photo-drop.dragging { border-color: var(--accent); }
+.photo-drop span { padding: 0 20px; text-align: center; }
+.order-tag {
+  font-size: 9px; text-transform: uppercase; letter-spacing: .16em;
+  border-radius: var(--radius); padding: 0 5px; background: var(--accent); color: var(--accent-text);
+}
+
+/* Stylist */
+.stylist {
+  margin-top: 36px; max-width: 680px;
+  border-left: 1px solid var(--accent); padding: 2px 0 2px 20px;
+}
+.stylist-head { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
+.eyebrow { font-size: 11px; text-transform: uppercase; letter-spacing: .24em; color: var(--muted); }
+.verdict {
+  font-size: 11px; letter-spacing: .08em; padding: 0 8px; border-radius: var(--radius);
+  border: 1px solid var(--border); color: var(--muted);
+}
+.verdict[data-level="high"] { background: var(--sage); border-color: var(--sage); color: var(--surface); }
+.verdict[data-level="low"] { color: var(--danger); border-color: var(--danger); }
+.stylist h2 { margin-bottom: 10px; }
+.stylist ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
+.stylist li::marker { color: var(--accent); }
+.tip { margin: 14px 0 0; color: var(--muted); font-size: 14px; }
+.tip strong { font-weight: 500; color: var(--text); margin-right: 6px; }
+
+.picks { margin-top: 56px; }
+.picks-list { display: grid; gap: 32px 24px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.pick { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; min-width: 0; }
+.pick h3 { margin: 6px 0 0; font: 500 17px var(--font-display); letter-spacing: .04em; }
+.pick p { margin: 0 0 6px; color: var(--muted); font-size: 13px; }
+.pick-items { display: flex; gap: 8px; width: 100%; }
+.pick-items .mini { flex: 1; min-width: 0; max-width: 64px; }
+.pick-items .swatch-thumb span { display: none; }
+
 @media (max-width: 560px) {
   .topbar { padding-top: 14px; }
   .tabs { gap: 20px; }

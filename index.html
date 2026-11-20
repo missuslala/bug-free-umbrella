@@ -53,15 +53,28 @@
         <label class="check"><input id="gen-accessory" type="checkbox" checked /> Accessory</label>
         <label class="check"><input id="gen-dress" type="checkbox" checked /> Allow dresses</label>
         <span class="spacer"></span>
-        <button id="shuffle-btn" class="btn primary">Shuffle</button>
+        <button id="shuffle-btn" class="btn primary">New look</button>
       </div>
-      <p class="hint">Choose Keep on a piece to hold it while you shuffle the rest. Tap a piece to swap it by hand.</p>
+      <p class="hint">Choose Keep on a piece to hold it while the stylist reworks the rest. Tap a piece to swap it by hand.</p>
       <div id="outfit-board" class="board"></div>
       <p id="outfit-message" class="empty"></p>
+      <aside id="stylist" class="stylist" hidden>
+        <div class="stylist-head">
+          <span class="eyebrow">Stylist's notes</span>
+          <span id="stylist-verdict" class="verdict"></span>
+        </div>
+        <h2 id="stylist-title"></h2>
+        <ul id="stylist-notes"></ul>
+        <p id="stylist-tip" class="tip"></p>
+      </aside>
       <div class="save-row">
         <input id="outfit-name" type="text" placeholder="Name this outfit (optional)" />
         <button id="save-outfit-btn" class="btn primary">Save outfit</button>
       </div>
+      <section id="picks" class="picks" hidden>
+        <h2>More looks from your stylist</h2>
+        <div id="picks-list" class="picks-list"></div>
+      </section>
     </section>
 
     <!-- SAVED -->
@@ -75,14 +88,24 @@
   <dialog id="item-dialog">
     <form id="item-form" method="dialog">
       <h2 id="item-dialog-title">Add item</h2>
+      <div class="link-row">
+        <label for="item-link">Shop link <span class="optional">(optional)</span></label>
+        <div class="link-input">
+          <input id="item-link" type="url" inputmode="url" placeholder="Paste a product page link" />
+          <button type="button" id="link-fill-btn" class="btn">Fill in</button>
+        </div>
+        <p id="link-status" class="field-hint">Paste a link to something you bought, and the details are read from it.</p>
+        <a id="item-link-open" class="field-hint" target="_blank" rel="noopener noreferrer" hidden>Open shop page ↗</a>
+      </div>
       <label class="photo-drop">
         <img id="photo-preview" alt="" hidden />
-        <span id="photo-placeholder">Add a photo (optional)</span>
+        <span id="photo-placeholder">Add a photo, or copy the product image in the shop and paste it here</span>
         <input id="item-photo" type="file" accept="image/*" hidden />
       </label>
       <label>Name<input id="item-name" required placeholder="e.g. White linen shirt" /></label>
       <label>Category<select id="item-category" required></select></label>
       <label>Color<select id="item-color"></select></label>
+      <label class="check-row"><input id="item-on-order" type="checkbox" /> On order (not arrived yet)</label>
       <fieldset>
         <legend>Seasons</legend>
         <div id="item-seasons" class="chips"></div>

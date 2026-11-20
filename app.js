@@ -147,6 +147,7 @@
       el('div', { class: 'card-body' },
         el('div', { class: 'card-name' }, item.name),
         el('div', { class: 'card-meta' }, colorDot(item.color), CATEGORY_LABEL[item.category] || item.category,
+          item.onOrder ? el('span', { class: 'order-tag' }, 'on order') : null,
           item.sample ? el('span', { class: 'sample-tag' }, 'sample') : null)));
   }
 
@@ -156,7 +157,7 @@
     const q = $('#filter-search').value.trim().toLowerCase();
     const list = items
       .filter(i => !cat || i.category === cat)
-      .filter(i => !q || i.name.toLowerCase().includes(q) || (i.color || '').includes(q));
+      .filter(i => !q || i.name.toLowerCase().includes(q) || (i.color || '').includes(q) || (i.shop || '').toLowerCase().includes(q));
     $('#sample-banner').hidden = !items.some(i => i.sample);
     const grid = $('#closet-grid');
     grid.replaceChildren(...list.map(i => itemCard(i, () => openItemDialog(i))));
@@ -191,6 +192,10 @@
     chipGroup($('#item-seasons'), SEASONS, item ? item.seasons || [] : []);
     chipGroup($('#item-occasions'), OCCASIONS, item ? item.occasions || [] : ['casual']);
     $('#delete-item-btn').hidden = !item;
+    $('#item-link').value = item?.link || '';
+    $('#item-on-order').checked = !!item?.onOrder;
+    $('#link-status').textContent = 'Paste a link to something you bought, and the details are read from it.';
+    showLinkOpen(item?.link);
     $('#item-photo').value = '';
     setPhotoPreview(pendingPhoto);
     $('#item-dialog').showModal();
@@ -229,6 +234,9 @@
       seasons: checkedValues($('#item-seasons')),
       occasions: checkedValues($('#item-occasions')),
       photo: pendingPhoto,
+      link: safeLink($('#item-link').value) || '',
+      shop: shopName($('#item-link').value),
+      onOrder: $('#item-on-order').checked,
     };
     if (editingId) {
       const idx = items.findIndex(i => i.id === editingId);
@@ -252,6 +260,135 @@
     renderAll();
   }
 
+  // ---------- Add from a shop link ----------
+  // Pages on other sites can't be fetched from here, so details are read from the link itself:
+  // most shops put the product name in the URL (…/products/linen-wide-leg-trousers-sand).
+  const CATEGORY_WORDS = [
+    ['dress', /\b(dress|gown|jumpsuit|playsuit|romper|overall|dungaree|kaftan)s?\b/],
+    ['outerwear', /\b(coat|jacket|blazer|parka|puffer|trench|gilet|vest|anorak|overcoat|bomber|raincoat|poncho|cape)s?\b/],
+    ['shoes', /\b(shoe|sneaker|trainer|boot|loafer|sandal|heel|pump|flat|mule|clog|slipper|espadrille|oxfords|derby|derbies|brogue|slingback|stiletto)s?\b/],
+    ['accessory', /\b(bag|tote|clutch|belt|scarf|hat|cap|beanie|earring|necklace|bracelet|ring|watch|sunglasses|glove|tie|backpack|purse|wallet|jewel(le)?ry|hairclip|scrunchie|brooch)s?\b/],
+    ['bottom', /\b(jean|trouser|pant|short|skirt|chino|legging|jogger|culotte|slack|sweatpant|cargo)s?\b/],
+    ['top', /\b(top|tee|t shirt|tshirt|shirt|blouse|sweater|jumper|cardigan|hoodie|sweatshirt|tank|cami|camisole|polo|knit|turtleneck|bodysuit|vest top|pullover|henley|tunic)s?\b/],
+  ];
+  const COLOR_WORDS = [
+    ['pattern', /\b(stripe[sd]?|striped|floral|print(ed)?|check(ed)?|plaid|gingham|leopard|zebra|polka|dot(s|ted)?|paisley|houndstooth|tartan|camo|animal)\b/],
+    ['black', /\b(black|jet|onyx|noir)\b/],
+    ['white', /\b(white|ivory|ecru|off white|optic|chalk|snow)\b/],
+    ['grey', /\b(gr[ae]y|charcoal|heather|silver|slate|ash|graphite|marl)\b/],
+    ['navy', /\b(navy|midnight|ink)\b/],
+    ['beige', /\b(beige|cream|camel|tan|sand|stone|oat(meal)?|nude|taupe|khaki|biscuit|ecru|natural|bone)\b/],
+    ['brown', /\b(brown|chocolate|cognac|mocha|espresso|coffee|chestnut|walnut|tobacco)\b/],
+    ['denim', /\b(denim|indigo wash|light wash|mid wash|dark wash|chambray)\b/],
+    ['red', /\b(red|burgundy|wine|maroon|oxblood|cherry|scarlet|bordeaux|crimson)\b/],
+    ['pink', /\b(pink|blush|rose|fuchsia|magenta|coral|salmon)\b/],
+    ['orange', /\b(orange|rust|terracotta|burnt|tangerine|apricot|copper|amber)\b/],
+    ['yellow', /\b(yellow|mustard|gold|lemon|butter|ochre)\b/],
+    ['olive', /\b(olive|army|moss|military)\b/],
+    ['green', /\b(green|sage|emerald|forest|mint|teal|bottle|jade|pistachio|khaki green)\b/],
+    ['blue', /\b(blue|cobalt|sky|azure|cornflower|indigo|turquoise|aqua|powder)\b/],
+    ['purple', /\b(purple|lilac|lavender|violet|plum|mauve|aubergine|grape)\b/],
+  ];
+  const SEASON_WORDS = [
+    [['spring', 'summer'], /\b(linen|sandal|short|tank|cami|swim|bikini|espadrille|sundress|seersucker|cotton voile|crochet)s?\b/],
+    [['fall', 'winter'], /\b(wool|cashmere|merino|puffer|parka|coat|boot|fleece|knit|sweater|jumper|turtleneck|beanie|shearling|corduroy|tweed|thermal|quilted|down)s?\b/],
+  ];
+  const OCCASION_WORDS = [
+    ['work', /\b(blazer|trouser|tailored|oxford|blouse|pencil|loafer|suit|pleated|shirt)s?\b/],
+    ['formal', /\b(gown|tuxedo|evening|satin|silk|cocktail|heel|stiletto|suit)s?\b/],
+    ['going out', /\b(party|mini|sequin|heel|satin|slip|corset|going out)s?\b/],
+    ['sport', /\b(running|gym|yoga|legging|jogger|sport|athletic|training|trainer|track)s?\b/],
+    ['lounge', /\b(lounge|pajama|pyjama|sweatpant|robe|slipper|sleep)s?\b/],
+  ];
+  const SKIP_SEGMENTS = /^(p|dp|pd|ip|product|products|item|items|shop|store|buy|en|us|uk|gb|de|fr|en-[a-z]{2}|[a-z]{2}-[a-z]{2}|women|womens|men|mens|clothing|apparel|collections?|catalog|c|s|gp|detail|details|view|index|html?)$/i;
+
+  function safeLink(raw) {
+    try {
+      const u = new URL(String(raw || '').trim());
+      return (u.protocol === 'https:' || u.protocol === 'http:') ? u.href : null;
+    } catch { return null; }
+  }
+  function shopName(raw) {
+    const href = safeLink(raw);
+    if (!href) return '';
+    const host = new URL(href).hostname.replace(/^(www|shop|store|m|eu|us|uk)\./, '');
+    const name = host.split('.')[0];
+    return name.charAt(0).toUpperCase() + name.slice(1);
+  }
+
+  function parseProductLink(raw) {
+    const href = safeLink(raw);
+    if (!href) return null;
+    const u = new URL(href);
+    const segments = u.pathname.split('/').map(seg => {
+      try { seg = decodeURIComponent(seg); } catch { /* keep as is */ }
+      return seg.replace(/\.(html?|aspx?|php)$/i, '');
+    }).filter(seg => seg && !SKIP_SEGMENTS.test(seg) && /[a-z]{3,}/i.test(seg));
+    // the product slug is usually the longest word-like path segment
+    const slug = segments.sort((a, b) => b.replace(/[^a-z]/gi, '').length - a.replace(/[^a-z]/gi, '').length)[0] || '';
+    const words = slug
+      .replace(/[-_+]+/g, ' ')
+      .replace(/\b[a-z]*\d[a-z\d]*\b/gi, ' ')   // drop SKU-like tokens
+      .replace(/\s+/g, ' ').trim();
+    const extra = ['color', 'colour', 'variant_color', 'col'].map(k => u.searchParams.get(k) || '').join(' ');
+    const text = (words + ' ' + extra).toLowerCase().replace(/-/g, ' ');
+    if (!words) return { shop: shopName(href) };
+
+    const find = list => list.find(([, re]) => re.test(text))?.[0];
+    // tidy the display name: no gender prefix, repeated brand or trailing color word
+    const brand = shopName(href).toLowerCase();
+    let clean = words.toLowerCase()
+      .replace(/^(womens?|mens?|women's|men's|unisex|ladies)\s+/, '');
+    if (brand && clean.startsWith(brand + ' ')) clean = clean.slice(brand.length + 1).replace(/^design\s+/, '');
+    for (let n = 0; n < 2; n++) {
+      const last = clean.match(/(?:\s+in)?\s+(\S+)$/);
+      if (last && COLOR_WORDS.some(([k, re]) => k !== 'pattern' && re.test(last[1]))) clean = clean.slice(0, last.index);
+    }
+    clean = clean.replace(/\s+(in|with|and)$/, '').trim() || words.toLowerCase();
+    const name = clean.charAt(0).toUpperCase() + clean.slice(1);
+    const seasons = [...new Set(SEASON_WORDS.filter(([, re]) => re.test(text)).flatMap(([v]) => v))];
+    const occasions = OCCASION_WORDS.filter(([, re]) => re.test(text)).map(([v]) => v);
+    return {
+      name: name.length > 60 ? name.slice(0, 60).replace(/\s\S*$/, '') : name,
+      category: find(CATEGORY_WORDS),
+      color: find(COLOR_WORDS) || (/\btrench\b/.test(text) ? 'beige' : undefined),
+      seasons: seasons.length === 4 ? [] : seasons,
+      occasions: occasions.length ? occasions : ['casual'],
+      shop: shopName(href),
+    };
+  }
+
+  function showLinkOpen(href) {
+    const a = $('#item-link-open');
+    const safe = safeLink(href);
+    a.hidden = !safe;
+    if (safe) { a.href = safe; a.textContent = `Open in ${shopName(safe) || 'shop'} ↗`; }
+  }
+
+  function fillFromLink() {
+    const raw = $('#item-link').value;
+    const info = parseProductLink(raw);
+    const status = $('#link-status');
+    if (!info) { status.textContent = 'That doesn’t look like a web link. It should start with https://'; return; }
+    showLinkOpen(raw);
+    if (!info.name) { status.textContent = `Saved the ${info.shop} link, but it has no product name in it. Type the details below.`; return; }
+    $('#item-name').value = info.name;
+    if (info.category) $('#item-category').value = info.category;
+    if (info.color) $('#item-color').value = info.color;
+    chipGroup($('#item-seasons'), SEASONS, info.seasons);
+    chipGroup($('#item-occasions'), OCCASIONS, info.occasions);
+    if (!editingId) $('#item-on-order').checked = true;
+    const missing = [!info.category && 'category', !info.color && 'color'].filter(Boolean);
+    status.textContent = `Filled in from ${info.shop}. Check the details${missing.length ? `, and pick the ${missing.join(' and ')}` : ''}. ` +
+      'To add the photo, copy the product image in the shop and paste it here.';
+  }
+
+  async function usePhotoFile(file) {
+    if (!file || !file.type.startsWith('image/')) return false;
+    try { pendingPhoto = await compressImage(file); setPhotoPreview(pendingPhoto); return true; }
+    catch { toast('Could not read that image'); return false; }
+  }
+
   // ---------- Outfit generator ----------
   const byId = id => items.find(i => i.id === id);
 
@@ -272,58 +409,242 @@
     return slots;
   }
 
-  // lower is better: too many accent colors or clashing patterns cost points
-  function clashScore(ids) {
-    const colors = ids.map(id => COLOR_BY_KEY[byId(id)?.color]).filter(Boolean);
-    const accents = new Set(colors.filter(c => !c.neutral && !c.pattern).map(c => c.key));
-    const patterns = colors.filter(c => c.pattern).length;
-    let score = 0;
-    score += Math.max(0, accents.size - 2) * 3;
-    score += Math.max(0, patterns - 1) * 3;
-    if (patterns && accents.size >= 2) score += 1;
-    if (colors.length && colors.every(c => c.key === colors[0].key) && colors.length > 2) score += 1; // all one color
-    return score;
-  }
-
   const pickRandom = arr => arr[Math.floor(Math.random() * arr.length)];
 
-  function shuffle() {
-    const allowDress = $('#gen-dress').checked;
-    const dressPool = eligible('dress');
-    const topPool = eligible('top');
-    const bottomPool = eligible('bottom');
-    const canSeparates = topPool.length && bottomPool.length;
-    const canDress = allowDress && dressPool.length;
+  // ---------- Stylist ----------
+  // Rules a stylist uses: one color story, matched formality, echoed colors, deliberate contrast.
+  const HUE = { red: 5, orange: 28, yellow: 50, olive: 65, green: 135, blue: 210, purple: 275, pink: 340 };
+  const WARMTH = { red: 'warm', orange: 'warm', yellow: 'warm', olive: 'warm', pink: 'warm', beige: 'warm', brown: 'warm',
+    green: 'cool', blue: 'cool', purple: 'cool', navy: 'cool', denim: 'cool', grey: 'cool' };
+  const DEPTH = { white: 0, beige: 0, pink: 0, yellow: 0, grey: 1, denim: 1, orange: 1, red: 1, olive: 1, green: 1,
+    blue: 1, purple: 1, black: 2, navy: 2, brown: 2 };
+  const FORMALITY = { lounge: 0, sport: 0, casual: 1, work: 2, 'going out': 2, formal: 3 };
+  const DRESS_WORD = ['relaxed', 'easy', 'polished', 'dressy'];
 
-    // locks decide the mode when present
-    let useDress;
-    if (locked.has('dress') && current.dress) useDress = true;
-    else if ((locked.has('top') && current.top) || (locked.has('bottom') && current.bottom)) useDress = false;
-    else if (canSeparates && canDress) useDress = Math.random() < dressPool.length / (dressPool.length + Math.min(topPool.length, bottomPool.length));
-    else useDress = !canSeparates && !!canDress;
+  const cap = t => t.charAt(0).toUpperCase() + t.slice(1);
+  const the = item => 'the ' + item.name.charAt(0).toLowerCase() + item.name.slice(1);
+  const plural = item => /s$/i.test(item.name.trim());
+  const verb = (item, one, many) => plural(item) ? many : one;
+  const avgOf = arr => arr.reduce((a, b) => a + b, 0) / arr.length;
+  const hueGap = (a, b) => { const d = Math.abs(HUE[a] - HUE[b]); return Math.min(d, 360 - d); };
+  function formalityOf(item) {
+    const v = (item.occasions || []).map(o => FORMALITY[o]).filter(n => n != null);
+    return v.length ? avgOf(v) : null;
+  }
 
-    const slots = wantedSlots(useDress);
-    const previous = slots.map(s => current[s]).join('|');
+  function styleOutfit(combo) {
+    const pieces = Object.values(combo).map(byId).filter(Boolean);
+    if (!pieces.length) return null;
+    const colorOf = p => COLOR_BY_KEY[p.color];
+    const notes = [];
+    let score = 10, title;
 
-    let best = [], bestScore = Infinity;
-    for (let attempt = 0; attempt < 80; attempt++) {
-      const combo = {};
-      for (const slot of slots) {
-        if (locked.has(slot) && current[slot] && byId(current[slot])) { combo[slot] = current[slot]; continue; }
-        const pool = eligible(slot);
-        if (pool.length) combo[slot] = pickRandom(pool).id;
+    const accents = pieces.filter(p => colorOf(p) && !colorOf(p).neutral && !colorOf(p).pattern);
+    const accentKeys = [...new Set(accents.map(p => p.color))];
+    const prints = pieces.filter(p => colorOf(p)?.pattern);
+    const base = pieces.filter(p => ['top', 'bottom', 'dress'].includes(p.category));
+
+    // color story
+    if (accentKeys.length === 0) {
+      const warm = pieces.every(p => WARMTH[p.color] !== 'cool');
+      title = prints.length ? 'Neutrals with a print' : warm ? 'Warm neutrals' : 'Quiet neutrals';
+      notes.push(prints.length
+        ? `A neutral base lets ${the(prints[0])} carry the interest.`
+        : 'An all-neutral palette always reads considered. Let texture and fit do the talking.');
+      score += 2;
+    } else if (accentKeys.length === 1) {
+      const hero = accents.find(p => p.category !== 'shoes' && p.category !== 'accessory');
+      if (hero) {
+        title = 'Built around ' + the(hero);
+        notes.push(`${cap(the(hero))} ${verb(hero, 'is', 'are')} the focal point. Everything else stays neutral so the ${hero.color} can lead.`);
+        score += 4;
+      } else {
+        const small = accents[0];
+        title = 'Neutrals with a hit of ' + small.color;
+        notes.push(`A neutral base finished with ${the(small)}: one small hit of color makes simple pieces look styled.`);
+        score += 3;
       }
-      const ids = Object.values(combo);
-      let score = clashScore(ids);
-      if (slots.map(s => combo[s]).join('|') === previous) score += 0.5; // prefer something new
-      if (score < bestScore) { bestScore = score; best = [combo]; }
-      else if (score === bestScore) best.push(combo);
+    } else if (accentKeys.length === 2) {
+      const [a, b] = accentKeys, gap = hueGap(a, b);
+      if (gap <= 50) {
+        title = WARMTH[a] === 'warm' ? 'Tonal warmth' : 'Cool tones';
+        notes.push(`${cap(a)} and ${b} sit side by side on the color wheel, so they blend instead of competing.`);
+        score += 3;
+      } else if (gap >= 140) {
+        title = 'Complementary pop';
+        notes.push(`${cap(a)} and ${b} are color-wheel opposites. It's a bold pairing, kept wearable by the neutrals around it.`);
+        score += 1;
+      } else {
+        title = 'Mixed accents';
+        notes.push(`${cap(a)} and ${b} pull in different directions. Swap one for a neutral to calm the look down.`);
+        score -= 6;
+      }
+    } else {
+      title = 'Too many colors';
+      notes.push(`${accentKeys.length} accent colors is a lot for one look. Keep it to one or two.`);
+      score -= 10;
     }
-    const chosen = pickRandom(best) || {};
 
-    for (const k of Object.keys(current)) if (!slots.includes(k)) { delete current[k]; locked.delete(k); }
-    for (const s of slots) { if (chosen[s]) current[s] = chosen[s]; else delete current[s]; }
-    renderBoard(slots);
+    // prints
+    if (prints.length > 1) { score -= 8; notes.push('Two prints fight for attention. Keep one and make the rest solid.'); }
+    else if (prints.length === 1 && accentKeys.length >= 2) score -= 2;
+    else if (prints.length === 1 && accentKeys.length === 1) {
+      notes.push(`${cap(the(prints[0]))} ${verb(prints[0], 'is', 'are')} the only print, so ${verb(prints[0], 'it has', 'they have')} room to breathe next to solids.`);
+    }
+
+    // formality
+    const levels = pieces.map(formalityOf).filter(v => v != null);
+    if (levels.length >= 2) {
+      const spread = Math.max(...levels) - Math.min(...levels);
+      if (spread > 1.5) {
+        const odd = pieces.filter(p => formalityOf(p) != null).sort((x, y) => formalityOf(x) - formalityOf(y))[0];
+        notes.push(`${cap(the(odd))} is much more casual than the rest. Swap it for something closer in polish.`);
+        score -= 10;
+      } else if (spread > 1) {
+        score -= 3;
+      } else {
+        notes.push(`Every piece sits at the same level of dress, so the look feels ${DRESS_WORD[Math.round(avgOf(levels))]} and intentional.`);
+        score += 2;
+      }
+    }
+
+    // a finishing piece that repeats a base color ties the outfit together
+    const baseColors = base.map(p => p.color);
+    const echo = pieces.find(p => ['shoes', 'accessory', 'outerwear'].includes(p.category)
+      && colorOf(p) && !colorOf(p).pattern && !['black', 'white'].includes(p.color) && baseColors.includes(p.color));
+    if (echo) {
+      const src = base.find(p => p.color === echo.color);
+      notes.push(`${cap(the(echo))} ${/s$/i.test(echo.name) ? 'repeat' : 'repeats'} the ${echo.color} of ${the(src)}, which ties the outfit together.`);
+      score += 2;
+    }
+
+    // contrast between top and bottom
+    const top = byId(combo.top), bottom = byId(combo.bottom);
+    if (top && bottom && DEPTH[top.color] != null && DEPTH[bottom.color] != null) {
+      const d = DEPTH[bottom.color] - DEPTH[top.color];
+      if (Math.abs(d) === 2) {
+        notes.push(d > 0 ? 'Light over dark gives a crisp, classic contrast.' : 'Dark over light is unexpected and modern, and draws the eye up.');
+        score += 1;
+      } else if (top.color === bottom.color) {
+        notes.push('Matching top and bottom make one long column of color, which lengthens your frame.');
+        score += 1;
+      }
+    }
+
+    return { score, title, notes: notes.slice(0, 3), tip: stylingTip(combo, levels) };
+  }
+
+  function stylingTip(combo, levels) {
+    const level = levels.length ? avgOf(levels) : 1;
+    const coat = byId(combo.outerwear), acc = byId(combo.accessory), dress = byId(combo.dress), top = byId(combo.top);
+    if (coat) return `Wear ${the(coat)} open so the layers underneath stay visible.`;
+    if (dress) return level >= 2 ? 'Keep hair and jewelry simple so the dress stays the statement.' : 'Add a belt or knot at the waist to give the dress shape.';
+    if (top && /sweater|knit|cardigan|jumper/i.test(top.name)) return 'Push the sleeves up to the forearm. It lightens a knit and shows a little wrist.';
+    if (top && level >= 1.75) return 'Tuck the top in fully for a sharp, defined waist.';
+    if (top && /shirt|blouse|oxford/i.test(top.name) && !/t-?shirt/i.test(top.name)) return 'Roll the sleeves twice and leave the top button open for an easy, lived-in finish.';
+    if (top) return 'Try a loose half-tuck at the front. It shows your waist without looking fussy.';
+    if (acc) return `Keep other jewelry minimal so ${the(acc)} has room.`;
+    return '';
+  }
+
+  // ---------- Outfit search ----------
+  function chooseMode(respectLocks) {
+    const dressPool = eligible('dress'), topPool = eligible('top'), bottomPool = eligible('bottom');
+    const canSeparates = topPool.length && bottomPool.length;
+    const canDress = $('#gen-dress').checked && dressPool.length;
+    if (respectLocks && locked.has('dress') && current.dress) return true;
+    if (respectLocks && ((locked.has('top') && current.top) || (locked.has('bottom') && current.bottom))) return false;
+    if (canSeparates && canDress) return Math.random() < dressPool.length / (dressPool.length + Math.min(topPool.length, bottomPool.length));
+    return !canSeparates && !!canDress;
+  }
+
+  function randomCombo(respectLocks) {
+    const combo = {};
+    for (const slot of wantedSlots(chooseMode(respectLocks))) {
+      if (respectLocks && locked.has(slot) && current[slot] && byId(current[slot])) { combo[slot] = current[slot]; continue; }
+      const pool = eligible(slot);
+      if (pool.length) combo[slot] = pickRandom(pool).id;
+    }
+    return combo;
+  }
+
+  const comboKey = c => Object.keys(c).sort().map(k => c[k]).join('|');
+
+  // sample many outfits and rank them the way a stylist would
+  function rankedLooks(respectLocks, samples) {
+    const seen = new Map();
+    for (let n = 0; n < samples; n++) {
+      const combo = randomCombo(respectLocks);
+      const key = comboKey(combo);
+      if (!key || seen.has(key)) continue;
+      const look = styleOutfit(combo);
+      if (look) seen.set(key, { combo, key, ...look });
+    }
+    return [...seen.values()].sort((a, b) => b.score - a.score);
+  }
+
+  function applyCombo(combo, keepLocks) {
+    for (const k of Object.keys(current)) delete current[k];
+    if (!keepLocks) locked.clear();
+    Object.assign(current, combo);
+    for (const k of [...locked]) if (!current[k]) locked.delete(k);
+  }
+
+  let picks = [];
+
+  function shuffle() {
+    const previous = comboKey(current);
+    const looks = rankedLooks(true, 160).filter(l => l.key !== previous);
+    // pick among the strongest few so repeated shuffles still feel fresh
+    const top = looks.filter(l => l.score >= (looks[0]?.score ?? 0) - 2).slice(0, 5);
+    const chosen = pickRandom(top);
+    if (chosen) applyCombo(chosen.combo, true);
+    renderBoard();
+    refreshPicks();
+  }
+
+  function refreshPicks() {
+    const here = comboKey(current);
+    const differs = (a, b) => { const x = a.split('|'), y = new Set(b.split('|')); return x.filter(id => !y.has(id)).length >= 2; };
+    picks = [];
+    for (const look of rankedLooks(false, 400)) {
+      if (look.score < 12) break;
+      if (look.key === here || !differs(look.key, here) || picks.some(p => !differs(p.key, look.key) || p.title === look.title)) continue;
+      picks.push(look);
+      if (picks.length === 3) break;
+    }
+    renderPicks();
+  }
+
+  function renderPicks() {
+    $('#picks').hidden = !picks.length;
+    $('#picks-list').replaceChildren(...picks.map(look => {
+      const pieces = Object.values(look.combo).map(byId).filter(Boolean);
+      return el('article', { class: 'pick' },
+        el('div', { class: 'pick-items' }, pieces.map(p => el('div', { class: 'mini' }, thumb(p)))),
+        el('h3', {}, look.title),
+        el('p', {}, look.notes[0] || ''),
+        el('button', { class: 'btn', type: 'button', onclick: () => {
+          applyCombo(look.combo, false);
+          renderBoard();
+          refreshPicks();
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        } }, 'Wear this'));
+    }));
+  }
+
+  function renderStylist(slots) {
+    const combo = {};
+    for (const s of slots) if (byId(current[s])) combo[s] = current[s];
+    const look = styleOutfit(combo);
+    $('#stylist').hidden = !look;
+    if (!look) return;
+    $('#stylist-title').textContent = look.title;
+    $('#stylist-notes').replaceChildren(...look.notes.map(n => el('li', {}, n)));
+    $('#stylist-tip').hidden = !look.tip;
+    $('#stylist-tip').replaceChildren(el('strong', {}, 'Styling tip '), look.tip);
+    $('#stylist-verdict').textContent = look.score >= 15 ? 'Stylist approved' : look.score >= 10 ? 'Works well' : 'Needs a rethink';
+    $('#stylist-verdict').dataset.level = look.score >= 15 ? 'high' : look.score >= 10 ? 'mid' : 'low';
   }
 
   function currentSlots() {
@@ -357,6 +678,7 @@
     if (!items.length) msg.textContent = 'Add clothes to your closet first.';
     else if (!slots.some(s => current[s])) msg.textContent = 'Nothing matches these filters — try "Any".';
     else msg.textContent = '';
+    renderStylist(slots);
   }
 
   function openPicker(slot) {
@@ -388,7 +710,8 @@
     const slots = currentSlots();
     const ids = slots.map(s => current[s]).filter(id => byId(id));
     if (!ids.length) return toast('Shuffle or pick some pieces first');
-    const name = $('#outfit-name').value.trim() || 'Outfit ' + (outfits.length + 1);
+    const look = styleOutfit(Object.fromEntries(slots.filter(sl => byId(current[sl])).map(sl => [sl, current[sl]])));
+    const name = $('#outfit-name').value.trim() || look?.title || 'Outfit ' + (outfits.length + 1);
     outfits.unshift({ id: uid(), name, itemIds: ids, createdAt: Date.now() });
     await save('outfits', outfits);
     $('#outfit-name').value = '';
@@ -420,6 +743,7 @@
     for (const id of o.itemIds) { const it = byId(id); if (it) { current[it.category] = id; locked.add(it.category); } }
     switchView('create');
     renderBoard();
+    refreshPicks();
   }
 
   async function deleteOutfit(id) {
@@ -463,6 +787,7 @@
         photo: typeof i.photo === 'string' && i.photo.startsWith('data:image/') ? i.photo : null,
         createdAt: Number(i.createdAt) || Date.now(),
         sample: i.sample === true || undefined,
+        link: safeLink(i.link) || '', shop: shopName(i.link), onOrder: i.onOrder === true,
       });
       const known = new Set(items.map(i => i.id));
       const newItems = data.items.map(clean).filter(i => !known.has(i.id));
@@ -551,8 +876,7 @@
     $('#item-photo').addEventListener('change', async e => {
       const f = e.target.files[0];
       if (!f) return;
-      try { pendingPhoto = await compressImage(f); setPhotoPreview(pendingPhoto); }
-      catch { toast('Could not read that image'); }
+      await usePhotoFile(f);
     });
     $('#shuffle-btn').addEventListener('click', shuffle);
     ['#gen-occasion', '#gen-season', '#gen-outerwear', '#gen-accessory', '#gen-dress']
@@ -564,6 +888,17 @@
     $('#import-input').addEventListener('change', e => { if (e.target.files[0]) importData(e.target.files[0]); e.target.value = ''; });
 
     $('#clear-samples-btn').addEventListener('click', clearSamples);
+    $('#link-fill-btn').addEventListener('click', fillFromLink);
+    $('#item-link').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); fillFromLink(); } });
+    $('#item-link').addEventListener('paste', () => setTimeout(fillFromLink, 0));
+    $('#item-dialog').addEventListener('paste', async e => {
+      const file = [...(e.clipboardData?.items || [])].find(i => i.type.startsWith('image/'))?.getAsFile();
+      if (file) { e.preventDefault(); if (await usePhotoFile(file)) toast('Photo added'); }
+    });
+    const drop = $('.photo-drop');
+    drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('dragging'); });
+    drop.addEventListener('dragleave', () => drop.classList.remove('dragging'));
+    drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('dragging'); usePhotoFile(e.dataTransfer.files[0]); });
     $('#backup-download').addEventListener('click', downloadBackup);
     $('#backup-copy').addEventListener('click', copyBackup);
     $('#backup-close').addEventListener('click', () => $('#backup-dialog').close());
