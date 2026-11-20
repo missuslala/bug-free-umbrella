@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Closet Outfit Maker</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>Closet</h1>
+    <nav class="tabs" role="tablist">
+      <button class="tab active" data-view="closet" role="tab">My closet</button>
+      <button class="tab" data-view="create" role="tab">Make outfit</button>
+      <button class="tab" data-view="saved" role="tab">Saved</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- CLOSET -->
+    <section id="view-closet" class="view active">
+      <div class="toolbar">
+        <button id="add-item-btn" class="btn primary">+ Add item</button>
+        <select id="filter-category" aria-label="Filter by category">
+          <option value="">All categories</option>
+        </select>
+        <input id="filter-search" type="search" placeholder="Search name or color" aria-label="Search" />
+        <span class="spacer"></span>
+        <button id="export-btn" class="btn ghost">Export</button>
+        <label class="btn ghost">Import<input id="import-input" type="file" accept="application/json" hidden /></label>
+      </div>
+      <div id="closet-grid" class="grid"></div>
+      <p id="closet-empty" class="empty">Your closet is empty. Add a few tops, bottoms and shoes to start making outfits.</p>
+    </section>
+
+    <!-- CREATE -->
+    <section id="view-create" class="view">
+      <div class="toolbar">
+        <label>Occasion
+          <select id="gen-occasion"><option value="">Any</option></select>
+        </label>
+        <label>Season
+          <select id="gen-season"><option value="">Any</option></select>
+        </label>
+        <label class="check"><input id="gen-outerwear" type="checkbox" /> Outerwear</label>
+        <label class="check"><input id="gen-accessory" type="checkbox" checked /> Accessory</label>
+        <label class="check"><input id="gen-dress" type="checkbox" checked /> Allow dresses</label>
+        <span class="spacer"></span>
+        <button id="shuffle-btn" class="btn primary">Shuffle</button>
+      </div>
+      <p class="hint">Tap the lock on a piece to keep it while you shuffle the rest. Tap a piece to swap it by hand.</p>
+      <div id="outfit-board" class="board"></div>
+      <p id="outfit-message" class="empty"></p>
+      <div class="save-row">
+        <input id="outfit-name" type="text" placeholder="Name this outfit (optional)" />
+        <button id="save-outfit-btn" class="btn primary">Save outfit</button>
+      </div>
+    </section>
+
+    <!-- SAVED -->
+    <section id="view-saved" class="view">
+      <div id="saved-list" class="saved-list"></div>
+      <p id="saved-empty" class="empty">No saved outfits yet.</p>
+    </section>
+  </main>
+
+  <!-- Add / edit item dialog -->
+  <dialog id="item-dialog">
+    <form id="item-form" method="dialog">
+      <h2 id="item-dialog-title">Add item</h2>
+      <label class="photo-drop">
+        <img id="photo-preview" alt="" hidden />
+        <span id="photo-placeholder">Add a photo (optional)</span>
+        <input id="item-photo" type="file" accept="image/*" hidden />
+      </label>
+      <label>Name<input id="item-name" required placeholder="e.g. White linen shirt" /></label>
+      <label>Category<select id="item-category" required></select></label>
+      <label>Color<select id="item-color"></select></label>
+      <fieldset>
+        <legend>Seasons</legend>
+        <div id="item-seasons" class="chips"></div>
+      </fieldset>
+      <fieldset>
+        <legend>Occasions</legend>
+        <div id="item-occasions" class="chips"></div>
+      </fieldset>
+      <div class="dialog-actions">
+        <button type="button" id="delete-item-btn" class="btn danger" hidden>Delete</button>
+        <span class="spacer"></span>
+        <button type="button" id="cancel-item-btn" class="btn ghost">Cancel</button>
+        <button type="submit" class="btn primary">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Pick item for a slot -->
+  <dialog id="pick-dialog">
+    <h2 id="pick-title">Choose</h2>
+    <div id="pick-grid" class="grid small"></div>
+    <div class="dialog-actions">
+      <button type="button" id="pick-none-btn" class="btn ghost">Remove from outfit</button>
+      <span class="spacer"></span>
+      <button type="button" id="pick-close-btn" class="btn ghost">Close</button>
+    </div>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
