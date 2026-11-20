@@ -4,11 +4,14 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Closet Outfit Maker</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;500&family=Zen+Kaku+Gothic+New:wght@400;500&display=swap" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <header class="topbar">
-    <h1>Closet</h1>
+    <div class="wordmark"><h1>Closet</h1><small>Outfit maker</small></div>
     <nav class="tabs" role="tablist">
       <button class="tab active" data-view="closet" role="tab">My closet</button>
       <button class="tab" data-view="create" role="tab">Make outfit</button>
@@ -52,7 +55,7 @@
         <span class="spacer"></span>
         <button id="shuffle-btn" class="btn primary">Shuffle</button>
       </div>
-      <p class="hint">Tap the lock on a piece to keep it while you shuffle the rest. Tap a piece to swap it by hand.</p>
+      <p class="hint">Choose Keep on a piece to hold it while you shuffle the rest. Tap a piece to swap it by hand.</p>
       <div id="outfit-board" class="board"></div>
       <p id="outfit-message" class="empty"></p>
       <div class="save-row">

@@ -15,22 +15,22 @@
 
   // neutral colors pair with anything; accents are limited per outfit
   const COLORS = [
-    { key: 'black', hex: '#1f1f1f', neutral: true },
-    { key: 'white', hex: '#f7f7f5', neutral: true },
-    { key: 'grey', hex: '#9a9a9a', neutral: true },
-    { key: 'navy', hex: '#24345c', neutral: true },
-    { key: 'beige', hex: '#d9c7a7', neutral: true },
-    { key: 'brown', hex: '#7a5134', neutral: true },
-    { key: 'denim', hex: '#5677a3', neutral: true },
-    { key: 'red', hex: '#c0392b' },
-    { key: 'pink', hex: '#ec9fb6' },
-    { key: 'orange', hex: '#e67e22' },
-    { key: 'yellow', hex: '#f1c40f' },
-    { key: 'green', hex: '#3f8f5a' },
-    { key: 'olive', hex: '#7d7f3c' },
-    { key: 'blue', hex: '#3b82c4' },
-    { key: 'purple', hex: '#8e5ea2' },
-    { key: 'pattern', hex: 'repeating-linear-gradient(45deg,#d9c7a7 0 6px,#c0392b 6px 12px)', pattern: true },
+    { key: 'black', hex: '#2b2926', neutral: true },
+    { key: 'white', hex: '#f5f2ea', neutral: true },
+    { key: 'grey', hex: '#a8a49c', neutral: true },
+    { key: 'navy', hex: '#323d55', neutral: true },
+    { key: 'beige', hex: '#d8c9ae', neutral: true },
+    { key: 'brown', hex: '#7b5c44', neutral: true },
+    { key: 'denim', hex: '#6a7f99', neutral: true },
+    { key: 'red', hex: '#a6493a' },
+    { key: 'pink', hex: '#d9a9a4' },
+    { key: 'orange', hex: '#c27845' },
+    { key: 'yellow', hex: '#d6b45c' },
+    { key: 'green', hex: '#5e7d61' },
+    { key: 'olive', hex: '#7c7a4e' },
+    { key: 'blue', hex: '#5a7fa3' },
+    { key: 'purple', hex: '#7d6684' },
+    { key: 'pattern', hex: 'repeating-linear-gradient(135deg,#d8c9ae 0 8px,#7b5c44 8px 10px)', pattern: true },
   ];
   const COLOR_BY_KEY = Object.fromEntries(COLORS.map(c => [c.key, c]));
 
@@ -131,9 +131,9 @@
     if (item.photo) return el('img', { class: 'thumb', src: item.photo, alt: item.name, loading: 'lazy' });
     const c = COLOR_BY_KEY[item.color];
     const bg = c ? c.hex : 'var(--border)';
-    const dark = c && ['black', 'navy', 'brown', 'red', 'green', 'olive', 'blue', 'purple', 'denim'].includes(c.key);
-    return el('div', { class: 'swatch-thumb', style: `background:${bg};${dark ? 'color:rgba(255,255,255,.75)' : ''}` },
-      CATEGORY_LABEL[item.category]?.split(' ')[0] || '');
+    const dark = c && ['black', 'navy', 'brown', 'red', 'green', 'olive', 'blue', 'purple', 'denim', 'orange'].includes(c.key);
+    return el('div', { class: 'swatch-thumb' + (c?.pattern ? ' patterned' : ''), style: `background:${bg};${dark ? 'color:rgba(245,242,234,.7)' : ''}` },
+      el('span', {}, CATEGORY_LABEL[item.category]?.split(' ')[0] || ''));
   }
 
   function colorDot(key) {
@@ -343,11 +343,11 @@
         el('div', { class: 'slot-label' }, CATEGORY_LABEL[slot]),
         item ? el('button', {
           class: 'lock-btn', type: 'button',
-          title: isLocked ? 'Unlock' : 'Lock this piece',
-          'aria-label': isLocked ? 'Unlock ' + item.name : 'Lock ' + item.name,
+          title: isLocked ? 'Let this piece shuffle' : 'Keep this piece while shuffling',
+          'aria-label': (isLocked ? 'Stop keeping ' : 'Keep ') + item.name,
           'aria-pressed': isLocked ? 'true' : 'false',
           onclick: () => { locked.has(slot) ? locked.delete(slot) : locked.add(slot); renderBoard(slots); },
-        }, isLocked ? '🔒' : '🔓') : null,
+        }, isLocked ? 'Kept' : 'Keep') : null,
         item ? itemCard(item, () => openPicker(slot))
              : el('button', { class: 'slot-empty', type: 'button', onclick: () => openPicker(slot) },
                  eligible(slot).length || items.some(i => i.category === slot) ? 'Choose…' : 'None in closet'));
